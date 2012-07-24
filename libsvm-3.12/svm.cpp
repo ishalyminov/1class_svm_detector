@@ -1011,7 +1011,7 @@ double Solver::calculate_rho()
 class CustomOneClassSolver : public Solver
 {
 public:
-    explicit CustomOneClassSolver(double in_footlier_bound = 1000)
+    explicit CustomOneClassSolver(double in_footlier_bound = 1e+10)
       : STRONG_FOOTLIER_BOUND(in_footlier_bound) { }
 
 public:
@@ -1600,6 +1600,12 @@ static void solve_one_class(
 	CustomOneClassSolver s;
 	const custom_one_class_svm_parameter* custom_param(
 	    static_cast<const custom_one_class_svm_parameter*>(param));
+	const std::set<int>& strong_footliers = custom_param->strong_footlier_indexes;
+	for (i = 0; i < n; ++i) {
+		if (strong_footliers.find(i) != strong_footliers.end()) {
+			alpha[i] = param->nu * l;
+		}
+	}
 	s.Solve(l, ONE_CLASS_Q(*prob,*param), zeros, ones,
 		alpha, 1.0, 1.0, param->eps, si, param->shrinking, custom_param->strong_footlier_indexes);
 #else
