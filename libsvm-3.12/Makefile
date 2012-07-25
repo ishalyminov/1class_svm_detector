@@ -22,4 +22,4 @@ svm-scale: svm-scale.c
 svm.o: svm.cpp svm.h
 	$(CXX) $(CFLAGS) -c svm.cpp
 clean:
-	rm -f *~ svm.o svm-train svm-predict svm-scale libsvm.so.$(SHVER)
+	rm -f *~ svm.o custom_one_class_util.o svm-train svm-predict svm-scale libsvm.so.$(SHVER)
