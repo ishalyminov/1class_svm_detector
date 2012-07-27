@@ -4,6 +4,10 @@
 #include <ctype.h>
 #include <errno.h>
 #include "svm.h"
+
+#include "custom_one_class_util.h"
+#include "solver_def.h"
+
 #define Malloc(type,n) (type *)malloc((n)*sizeof(type))
 
 void print_null(const char *s) {}
@@ -55,7 +59,7 @@ void parse_command_line(int argc, char **argv, char *input_file_name, char *mode
 void read_problem(const char *filename);
 void do_cross_validation();
 
-struct svm_parameter param;		// set by parse_command_line
+struct custom_one_class_svm_parameter param;		// set by parse_command_line
 struct svm_problem prob;		// set by read_problem
 struct svm_model *model;
 struct svm_node *x_space;
@@ -91,6 +95,12 @@ int main(int argc, char **argv)
 
 	parse_command_line(argc, argv, input_file_name, model_file_name);
 	read_problem(input_file_name);
+#ifdef CUSTOM_SOLVER
+    if (param.svm_type == ONE_CLASS)
+    {
+        param.strong_footlier_indexes = filter_strong_footliers(input_file_name);
+    }
+#endif
 	error_msg = svm_check_parameter(&prob,&param);
 
 	if(error_msg)

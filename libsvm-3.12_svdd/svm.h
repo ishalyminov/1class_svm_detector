@@ -3,6 +3,8 @@
 
 #define LIBSVM_VERSION 310
 
+#include <set>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -44,6 +46,11 @@ struct svm_parameter
 	double p;	/* for EPSILON_SVR */
 	int shrinking;	/* use the shrinking heuristics */
 	int probability; /* do probability estimates */
+};
+
+struct custom_one_class_svm_parameter : public svm_parameter
+{
+    std::set<int> strong_footlier_indexes;
 };
 
 //
