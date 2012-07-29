@@ -1,4 +1,4 @@
-./svm-train -c 1000 -n 0.99999 -s 5 -t 2 data/points_2
+./svm-train -s 1 -n 0.12 -t 2 -v 4 ../data/points_2
 mv points_2* data/
 ./svm-predict data/points_2 data/points_2.model data/points_2.out
 cd data

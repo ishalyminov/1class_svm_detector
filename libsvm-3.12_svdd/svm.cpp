@@ -1035,11 +1035,22 @@ private:
 //
 // additional constraint: e^T \alpha = constant
 //
-class Solver_NU : public Solver
+
+#include <iostream>
+
+class Solver_NU : public CustomOneClassSolver
 {
 public:
 	Solver_NU() {}
-	void Solve(int l, const QMatrix& Q, const double *p, const schar *y,
+	virtual void Solve(int l, const QMatrix& Q, const double *p, const schar *y,
+		   double *alpha, double Cp, double Cn, double eps,
+		   SolutionInfo* si, int shrinking, const std::set<int>& in_strong_footliers)
+	{
+		std::cout << "Solver_NU::CustomSolve called" << std::endl;
+		CustomOneClassSolver::Solve(l,Q,p,y,alpha,Cp,Cn,eps,si,shrinking, in_strong_footliers);
+	}
+
+	virtual void Solve(int l, const QMatrix& Q, const double *p, const schar *y,
 		   double *alpha, double Cp, double Cn, double eps,
 		   SolutionInfo* si, int shrinking)
 	{
@@ -1587,9 +1598,24 @@ static void solve_nu_svc(
 	for(i=0;i<l;i++)
 		zeros[i] = 0;
 
+#ifdef CUSTOM_SOLVER
+    Solver_NU s;
+    const custom_one_class_svm_parameter* custom_param(
+        static_cast<const custom_one_class_svm_parameter*>(param));
+    const std::set<int>& strong_footliers = custom_param->strong_footlier_indexes;
+    for (i = 0; i < n; ++i) {
+        if (strong_footliers.find(i) != strong_footliers.end()) {
+            alpha[i] = param->nu * l;
+        }
+    }
+    s.Solve(l, SVC_Q(*prob,*param), zeros, ones,
+        alpha, 1.0, 1.0, param->eps, si, param->shrinking, custom_param->strong_footlier_indexes);
+#else
 	Solver_NU s;
 	s.Solve(l, SVC_Q(*prob,*param,y), zeros, y,
-		alpha, 1.0, 1.0, param->eps, si,  param->shrinking);
+		alpha, 1.0, 1.0, param->eps, si, param->shrinking);
+#endif
+
 	double r = si->r;
 
 	info("C = %f\n",1/r);
@@ -1733,7 +1759,7 @@ static void solve_r2(
         double *alpha, Solver::SolutionInfo* si)
 {
         int l = prob->l;
-	double* diag = new double[l];
+		double* diag = new double[l];
         schar *ones = new schar[l];
         int i;
 
@@ -1743,11 +1769,11 @@ static void solve_r2(
 
         for(i=0;i<l;i++)
         {
-		if(param->kernel_type != RBF)
-			diag[i]=-Kernel::k_function(prob->x[i],prob->x[i],*param)/2;
-		else
-			diag[i]=-0.5;
-		ones[i] = 1;
+			if(param->kernel_type != RBF)
+				diag[i]=-Kernel::k_function(prob->x[i],prob->x[i],*param)/2;
+			else
+				diag[i]=-0.5;
+			ones[i] = 1;
         }
 
 	Solver s;
@@ -1817,18 +1843,31 @@ static void solve_svdd(
                 ones[i] = 1;
         }
 
-        Solver s;
-
-        s.Solve(l, Q, linear_term, ones, alpha, ub, ub,
-                param->eps, si, param->shrinking);
+#ifdef CUSTOM_SOLVER
+    CustomOneClassSolver s;
+    const custom_one_class_svm_parameter* custom_param(
+        static_cast<const custom_one_class_svm_parameter*>(param));
+    const std::set<int>& strong_footliers = custom_param->strong_footlier_indexes;
+    for (i = 0; i < n; ++i) {
+        if (strong_footliers.find(i) != strong_footliers.end()) {
+            alpha[i] = param->nu * l;
+        }
+    }
+    s.Solve(l, Q, zeros, ones,
+        alpha, 1.0, 1.0, param->eps, si, param->shrinking, custom_param->strong_footlier_indexes);
+#else
+    Solver s;
+    s.Solve(l, Q, linear_term, ones, alpha, ub, ub,
+        param->eps, si, param->shrinking);
+#endif
 
         int j = 0; double min_coef = DBL_MAX;
         for(i=0;i<l;i++)
         {
                 if(alpha[i]>0 && alpha[i]<ub && alpha[i] < min_coef)
                 {
-			min_coef = alpha[i];
-                        j = i;
+                	min_coef = alpha[i];
+                    j = i;
                 }
         }
 
@@ -1899,8 +1938,6 @@ static decision_function svm_train_one(
 		case R2q:
 			solve_r2q(prob,param,alpha,&si);
 			break;
-
-
 	}
 
 	info("obj = %f, rho = %f\n",si.obj,si.rho);
@@ -1948,7 +1985,7 @@ static void sigmoid_train(
 	for (i=0;i<l;i++)
 		if (labels[i] > 0) prior1+=1;
 		else prior0+=1;
-	
+
 	int max_iter=100;	// Maximal number of iterations
 	double min_step=1e-10;	// Minimal step taken in line search
 	double sigma=1e-12;	// For numerically strict PD of Hessian
@@ -1959,7 +1996,7 @@ static void sigmoid_train(
 	double fApB,p,q,h11,h22,h21,g1,g2,det,dA,dB,gd,stepsize;
 	double newA,newB,newf,d1,d2;
 	int iter; 
-	
+
 	// Initial Point and Initial Fun Value
 	A=0.0; B=log((prior0+1.0)/(prior1+1.0));
 	double fval = 0.0;
@@ -2069,7 +2106,7 @@ static void multiclass_probability(int k, double **r, double *p)
 	double **Q=Malloc(double *,k);
 	double *Qp=Malloc(double,k);
 	double pQp, eps=0.005/k;
-	
+
 	for (t=0;t<k;t++)
 	{
 		p[t]=1.0/k;  // Valid if k = 1
@@ -2254,7 +2291,7 @@ static void svm_group_classes(const svm_problem *prob, int *nr_class_ret, int **
 	int nr_class = 0;
 	int *label = Malloc(int,max_nr_class);
 	int *count = Malloc(int,max_nr_class);
-	int *data_label = Malloc(int,l);	
+	int *data_label = Malloc(int,l);
 	int i;
 
 	for(i=0;i<l;i++)
@@ -2357,7 +2394,7 @@ svm_model *svm_train(const svm_problem *prob, const svm_parameter *param)
 				++j;
 			}		
 
-		if (param->svm_type == SVDD)	
+		if (param->svm_type == SVDD)
 			model->radius = f.radius;
 
 		free(f.alpha);
@@ -2373,7 +2410,7 @@ svm_model *svm_train(const svm_problem *prob, const svm_parameter *param)
 		int *perm = Malloc(int,l);
 
 		// group training data of the same class
-		svm_group_classes(prob,&nr_class,&label,&start,&count,perm);		
+		svm_group_classes(prob,&nr_class,&label,&start,&count,perm);
 		svm_node **x = Malloc(svm_node *,l);
 		int i;
 		for(i=0;i<l;i++)
@@ -2609,9 +2646,9 @@ void svm_cross_validation(const svm_problem *prob, const svm_parameter *param, i
 		fold_start[0]=0;
 		for (i=1;i<=nr_fold;i++)
 			fold_start[i] = fold_start[i-1]+fold_count[i-1];
-		free(start);	
+		free(start);
 		free(label);
-		free(count);	
+		free(count);
 		free(index);
 		free(fold_count);
 	}
@@ -2658,7 +2695,7 @@ void svm_cross_validation(const svm_problem *prob, const svm_parameter *param, i
 			double *prob_estimates=Malloc(double,svm_get_nr_class(submodel));
 			for(j=begin;j<end;j++)
 				target[perm[j]] = svm_predict_probability(submodel,prob->x[perm[j]],prob_estimates);
-			free(prob_estimates);			
+			free(prob_estimates);
 		}
 		else
 			for(j=begin;j<end;j++)
@@ -2666,9 +2703,9 @@ void svm_cross_validation(const svm_problem *prob, const svm_parameter *param, i
 		svm_free_and_destroy_model(&submodel);
 		free(subprob.x);
 		free(subprob.y);
-	}		
+	}
 	free(fold_start);
-	free(perm);	
+	free(perm);
 }
 
 
